@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  medibot:
+    build: .
+    ports:
+      - "8000:8005"  # FastAPI
+      - "8501:8501"  # Streamlit
+    volumes:
+      - .:/app # Mount the current directory to /app
