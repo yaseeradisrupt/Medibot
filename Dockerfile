@@ -10,13 +10,8 @@ RUN pip install --no-cache-dir -r app/requirements.txt
 COPY . .
 
 # Check if the vector store folder exists, and if not, run createMemoryForLLM.py
-RUN if [ ! -d "vectorstore/db_faiss" ]; then \
-        echo "Vector store not found. Creating vector store..."; \
-        python3 app/utils/createMemoryForLLM.py; \
-    else \
-        echo "Vector store already exists. Skipping creation."; \
-    fi
-
+# RUN python3 app/utils/createMemoryForLLM.py
+    
 # Expose ports for FastAPI and Streamlit
 EXPOSE 8005 8501
 
