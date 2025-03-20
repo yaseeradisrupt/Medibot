@@ -1,17 +1,20 @@
 from load_dotenv import load_dotenv
 from openai import OpenAI
-from typing_extensions import TypedDict
+from typing_extensions import Annotated, TypedDict
 from typing import Optional
 from langgraph.graph import StateGraph, START, END
 from app.config.config import EMBEDDING_MODEL, OPENAI_API_KEY, OPEN_AI_MODEL
 from app.utils.milvusCollection import get_milvus_collection
 import os
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.message import add_messages
+from langchain.schema import HumanMessage
 from openai import AsyncOpenAI
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 class GraphState(TypedDict):
-    messages: list
+    messages: Annotated[list, add_messages]
     context: Optional[str]
 
 load_dotenv()
@@ -44,6 +47,7 @@ def get_context(query):
     return "\n".join(retrieved_contexts)
 
 async def stream_tokens(messages):
+    print("🔹 Received messages:", messages)
     response = await openai_client.chat.completions.create(
         messages=messages, model=OPEN_AI_MODEL, stream=True
     )
@@ -68,12 +72,35 @@ async def stream_tokens(messages):
 
 async def call_model(state, config, writer):
     messages = state["messages"]
-    context = get_context(messages[-1]["content"])
+    context = get_context(messages[-1].content)
     
+    formatted_messages = []
+    for msg in messages:
+        if isinstance(msg, dict):
+            if "role" not in msg:
+                print("Fixing missing role:", msg)
+                msg["role"] = "user"  # Default to user if missing
+            formatted_messages.append(msg)
+        elif isinstance(msg, HumanMessage):
+            formatted_messages.append({"role": "user", "content": msg.content})
     
-    system_message = {
-    "role": "system",
-    "content": f"""
+    system_message = generate_system_prompt(context)
+    full_messages = [system_message] + formatted_messages
+    full_response = ""
+    print("Final messages before OpenAI call:", full_messages)
+
+    async for msg_chunk in stream_tokens(full_messages):
+        full_response += msg_chunk["content"]
+        metadata = {**config["metadata"], "tags": ["response"]}
+        writer((msg_chunk, metadata))
+
+    return {"messages": messages + [{"role": "assistant", "content": full_response}]}
+
+def generate_system_prompt(context: str) -> dict:
+    """Generates the system message with structured formatting."""
+    return {
+        "role": "system",
+        "content": f"""
         You are a medical assistant with the knowledge and tone of a highly experienced doctor. 
         The following information represents your internal medical knowledge:
 
@@ -113,44 +140,14 @@ async def call_model(state, config, writer):
         - <Treatment 1>\n
         - <Treatment 2>\n
         
-
-        **Example Response for Diabetes:**
-        
-        **TITLE** Diabetes
-
-        **DESCRIPTION** Diabetes is a chronic condition that affects how the body processes blood sugar.
-
-        **Symptoms** 
-        - Frequent urination
-        - Excessive thirst
-        - Unexplained weight loss
-        - Fatigue
-
-        **Causes** 
-        - Insulin resistance
-        - Autoimmune response (Type 1)
-
-        **Treatment** 
-        - Lifestyle changes (diet, exercise)
-        - Medications like insulin or metformin
-        
-
         If you **do not know the answer**, respond with:  
         `"I don't know the answer. You may want to consult a doctor for additional help."`
-    """
+        """
     }
-
-    full_response = ""
-    async for msg_chunk in stream_tokens([system_message] + messages):
-        full_response += msg_chunk["content"]
-        metadata = {**config["metadata"], "tags": ["response"]}
-        writer((msg_chunk, metadata))
-
-    return {"messages": messages + [{"role": "assistant", "content": full_response}]}
 
 builder = StateGraph(state_schema=GraphState)
 builder.add_node("call_model", call_model)
 builder.add_edge(START, "call_model")
 builder.add_edge("call_model", END)
-
-graph = builder.compile()
+memory = MemorySaver()
+graph = builder.compile(checkpointer=memory)

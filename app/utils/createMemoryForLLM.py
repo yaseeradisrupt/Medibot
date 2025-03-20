@@ -10,9 +10,15 @@ from app.utils.milvusCollection import get_milvus_collection
 os.makedirs(PROCESSED_PATH, exist_ok=True)
 llm = OpenAI(api_key=OPENAI_API_KEY)
 try:
+    # Check if the directory is empty
+    if not os.listdir(DATA_PATH):
+        print("No files to process.")
+        exit()
+
     collection= get_milvus_collection()
     # Step 1: Load Raw PDFs
     def load_pdf_files(data):
+
         loader = DirectoryLoader(data, glob='*.pdf', loader_cls=PyPDFLoader)
         documents = loader.load()
         return documents
