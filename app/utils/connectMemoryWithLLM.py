@@ -142,6 +142,10 @@ def generate_system_prompt(context: str) -> dict:
         
         If you **do not know the answer**, respond with:  
         `"I don't know the answer. You may want to consult a doctor for additional help."`
+
+        **Important Restriction:**  
+        - **Only answer medical-related questions.**  
+        - If the question is not related to medical topics, respond with: I specialize in medical topics. I cannot provide information on that.
         """
     }
 
