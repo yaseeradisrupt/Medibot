@@ -2,17 +2,24 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.utils.connectMemoryWithLLM import graph
+# from app.models.model import graph
+import uuid
 app = FastAPI()
 
 class Query(BaseModel):
     query: str
 
+def get_thread_id():
+    return str(uuid.uuid4())
+
+thread_id = get_thread_id()
 async def event_generator(query: str):
-    async for msg, metadata in graph.astream(
+    async for msg,metadata in graph.astream(
         {"messages": [{"role": "user", "content": query}]},
         stream_mode="custom",
-        config={"configurable": {"thread_id": "abc123"}}
+        config={"configurable": {"thread_id":thread_id}}
     ):
+ 
         if "response" in metadata.get("tags", []):
             yield msg["content"] + "\n"
 

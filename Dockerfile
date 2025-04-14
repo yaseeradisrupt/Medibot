@@ -4,7 +4,12 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY requirements.txt app/requirements.txt
-RUN pip install --no-cache-dir -r app/requirements.txt
+
+
+# Install dependencies (with cache)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r app/requirements.txt
+# RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
 # Copy the entire project
 COPY . .

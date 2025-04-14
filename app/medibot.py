@@ -32,7 +32,6 @@ def main():
                         for chunk in response.iter_lines():
                             if chunk:
                                 decoded_chunk = chunk.decode("utf-8")
-                                print("======================",decoded_chunk)
                                 # .strip()
                                   # Ensure words are properly spaced
                                 if streamed_text and not streamed_text.endswith((" ", "\n")):
